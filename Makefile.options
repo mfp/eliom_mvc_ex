@@ -6,9 +6,9 @@
 PROJECT_NAME := eliom_mvc_ex
 
 # Source files for the server
-SERVER_FILES := $(wildcard *.eliomi *.eliom)
+SERVER_FILES := $(wildcard *.eliomi *.eliom *.ml *.mli)
 # Source files for the client
-CLIENT_FILES := $(wildcard *.eliomi *.eliom)
+CLIENT_FILES := $(wildcard *.eliomi *.eliom *.ml *.mli)
 
 # OCamlfind packages for the server
 SERVER_PACKAGES :=

@@ -1,3 +1,28 @@
 * {
     font-family: sans-serif;
 }
+
+.error {
+    background-color: #ffcccc;
+}
+
+.controls { padding: 20px }
+
+.click-to-edit:after {
+    content: " (click to edit)";
+    margin-left: 50px;
+    opacity: 0.5;
+}
+
+.thing { border: 1px solid black }
+.thing td { margin: 20px }
+.thing td.desc {
+    background-color: #e0e0e0;
+    width: 40em;
+}
+
+.thing td.desc input { width: 40em }
+
+.things { margin-top: 3em }
+.things th { min-width: 10em; text-align: center }
+
