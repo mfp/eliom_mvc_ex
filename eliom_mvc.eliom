@@ -8,20 +8,15 @@ type effect = unit -> unit
 
 module type COMPONENT =
 sig
-  module Model : sig type t end
-  module Action : sig type t end
-  module Controller :
-  sig
-    val update : Action.t push_action -> Action.t -> Model.t -> Model.t * effect
-  end
+  type model
+  type action
+  type context
+  type view
 
-  module View :
-  sig
-    type context
-    type view
-    val signal :
-      context -> Action.t push_action -> Model.t React.signal -> view React.signal
-  end
+  val update : action push_action -> action -> model -> model * effect
+
+  val view :
+    context -> action push_action -> model React.signal -> view React.signal
 end
 
 module Effect =
