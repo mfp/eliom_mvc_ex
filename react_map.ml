@@ -10,6 +10,11 @@ sig
       ?eq:('a -> 'a -> bool) ->
       (O.t -> 'a React.signal -> 'b React.signal) ->
       'a t React.signal -> 'b t React.signal
+
+    val map :
+      ?eq:('a -> 'a -> bool) ->
+      (O.t -> 'a React.signal -> 'b) ->
+      'a t React.signal -> 'b t React.signal
   end
 end =
 struct
@@ -81,5 +86,35 @@ struct
                m)
           init
           key_changes
+
+    let map ?eq f m =
+      let key_changes =
+        S.diff
+          (fun m2 m1 ->
+             let b1      = SSET.of_list @@ keys m1 in
+             let b2      = SSET.of_list @@ keys m2 in
+             let deleted = SSET.elements @@ SSET.diff b1 b2 in
+             let added   = SSET.elements @@ SSET.diff b2 b1 in
+               (added, deleted)) @@
+          m in
+
+      let mk k =
+        f k @@
+        S.fmap ?eq
+          (fun m -> try Some (find k m) with Not_found -> None)
+          (find k @@ S.value m)
+          m in
+
+      let init = fold (fun k v m -> add k (mk k) m) (S.value m) empty in
+
+        S.fold ~eq:(==)
+          (fun m (added, deleted) ->
+             let m = List.fold_left (fun m k -> remove k m) m deleted in
+             let m = List.fold_left (fun m k -> add k (mk k) m) m added in
+               m)
+          init
+          key_changes
+
+
   end
 end

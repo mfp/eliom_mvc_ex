@@ -3,9 +3,16 @@
   open Eliom_content
   open Html5.D
   open Lwt
+
+  (* missing in ReactiveData 0.1 and don't feel like rebuilding eliom atm. *)
+  let make_from_s s =
+    let open ReactiveData.RList in
+    make_from (React.S.value s) (React.E.map (fun e -> Set e) (React.S.changes s))
 }}
 
 {client{
+
+module R = Html5.R
 
 module Counter =
 struct
@@ -20,20 +27,16 @@ struct
   open React
 
   type context = unit
-  type view = [`Span] elt
+  type view = [`Span]
 
   let view () push m =
     let dec = button ~button_type:`Button
                 ~a:[a_onclick (fun _ -> push `Dec)] [pcdata "-"] in
     let inc = button ~button_type:`Button
                 ~a:[a_onclick (fun _ -> push `Inc)] [pcdata "+"] in
-
-      S.map ~eq:(==)
-        (fun n ->
-           span
-             [ dec; pcdata " ";
-               span [ pcdata @@ string_of_int n ]; pcdata " "; inc ])
-        m
+      span
+        [ dec; pcdata " ";
+          span [ R.pcdata @@ S.map string_of_int m ]; pcdata " "; inc ]
 end
 
 module Thing =
@@ -78,29 +81,31 @@ struct
     let counter = S.map (fun m -> m.count) m |>
                   Counter.view () (fun x -> push @@ Counter x) in
 
-    let mk_desc m = match m.status with
-      | `Normal ->
-          td ~a:[a_class ["desc"; "click-to-edit"];
-                 a_onclick (fun _ -> push @@ Edit_desc `Start)]
-          [ pcdata m.desc ]
-      | `Edit ->
-        let desc  = Raw.input ~a:[a_value m.desc] () in
-          Eliom_mvc.Handler.on_enter_or_blur desc
-            (fun value -> push @@ Edit_desc (`Finish value));
-          push (Set_focus desc);
-          td ~a:[a_class ["desc"]] [desc]
+    let desc =
+      R.node @@
+      S.map
+        (fun m -> match m.status with
+           | `Normal ->
+               td ~a:[a_class ["desc"; "click-to-edit"];
+                      a_onclick (fun _ -> push @@ Edit_desc `Start)]
+               [ pcdata m.desc ]
+           | `Edit ->
+             let desc  = Raw.input ~a:[a_value m.desc] () in
+               Eliom_mvc.Handler.on_enter_or_blur desc
+                 (fun value -> push @@ Edit_desc (`Finish value));
+               push (Set_focus desc);
+               td ~a:[a_class ["desc"]] [desc]) @@
+      m
     in
-      S.l2 ~eq:(==)
-        (fun m counter ->
-           Lwt_log.ign_debug_f "Render Thing";
-           tr ~a:[a_class ["thing"; class_of_status m.status]]
-             [
-               td ~a:[a_class ["id"]]
-                 [ del_btn; pcdata " "; pcdata m.id ];
-               td ~a:[a_class ["counter"]] [counter];
-               mk_desc m;
-             ])
-        m counter
+      Lwt_log.ign_debug_f "Render Thing";
+      tr ~a:[R.a_class @@
+             S.map (fun m -> [ "thing"; class_of_status m.status ]) m]
+        [
+          td ~a:[a_class ["id"]]
+            [ del_btn; pcdata " "; R.pcdata @@ S.map (fun m -> m.id) m ];
+          td ~a:[a_class ["counter"]] [counter];
+          desc;
+        ]
 end
 
 module ThingList =
@@ -174,11 +179,7 @@ struct
     | `OK -> ""
 
   let view () push m =
-    (* We can hoist element definition outside the view view so as to
-     * use elements with DOM semantics (thus allowing to preserve view state
-     * like input contents, cursor position, etc., which we don't really
-     * want to include in the model itself. *)
-    let id_input  = Raw.input ~a:[a_value @@ (S.value m).id] () in
+    let id_input  = Raw.input ~a:[R.a_value @@ S.map (fun m -> m.id) m] () in
     let id_input_ = Html5.To_dom.of_input id_input in
 
     let add_btn   =
@@ -194,38 +195,37 @@ struct
     let push_delete id () = push @@ Delete_thing id in
 
     let thing_views =
-      M.React.map_s
+      M.React.map
         (fun id t ->
            Thing.view
              (push_delete id)
-             (fun a -> push @@ Thing_action (id, a))
-             t)
-        things
+             (fun a -> push @@ Thing_action (id, a)) t)
+        things in
+
+    let rows =
+      make_from_s @@
+      S.map ~eq:(==) (fun m -> List.rev @@ M.fold (fun _ v l -> v :: l) m [])
+        thing_views
     in
-      S.l2 ~eq:(==)
-        (fun m thing_views ->
-           let rows = List.rev @@ M.fold (fun _ v l -> v :: l) thing_views [] in
+      Lwt_log.ign_debug_f "Render list of Things";
 
-             id_input_##value <- Js.string m.id;
-
-             Lwt_log.ign_debug_f "Render list of %d Things" @@ List.length rows;
-
-             div ~a:[a_class ["thing-list"]]
-               [
-                 Raw.form
-                   ~a:[a_class ["controls"; class_of_status m.status];
-                       a_onsubmit (fun ev -> Dom.preventDefault ev);
-                      ]
-                   [ id_input; pcdata " "; add_btn ];
-                 tablex
-                   ~a:[a_class ["things"]]
-                   ~thead:(thead
-                             [ tr [ th ~a:[a_class ["id"]] [ pcdata "id"];
-                                    th ~a:[a_class ["count"]] [ pcdata "count"];
-                                    th ~a:[a_class ["desc"]] [ pcdata "desc"]; ] ])
-                   [tbody rows]
-               ])
-        m thing_views
+      div ~a:[a_class ["thing-list"]]
+        [
+          Raw.form
+            ~a:[
+              R.a_class @@
+              S.map (fun m -> ["controls"; class_of_status m.status]) m;
+              a_onsubmit (fun ev -> Dom.preventDefault ev);
+            ]
+            [ id_input; pcdata " "; add_btn ];
+          tablex
+            ~a:[a_class ["things"]]
+            ~thead:(thead
+                      [ tr [ th ~a:[a_class ["id"]] [ pcdata "id"];
+                             th ~a:[a_class ["count"]] [ pcdata "count"];
+                             th ~a:[a_class ["desc"]] [ pcdata "desc"]; ] ])
+            [R.tbody rows]
+        ]
 end
 }}
 
@@ -249,8 +249,7 @@ let () =
                               ThingList.string_of_action a)
              %content
              ThingList.update
-             (fun push m -> React.S.map (fun x -> [x]) @@
-                            ThingList.view () push m)
+             (ThingList.view ())
              (ThingList.make [])
          }};
          Lwt.return

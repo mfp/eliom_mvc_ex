@@ -16,7 +16,8 @@ sig
   val update : action push_action -> action -> model -> model * effect
 
   val view :
-    context -> action push_action -> model React.signal -> view React.signal
+    context -> action push_action ->
+    model React.signal -> view Eliom_content.Html5.elt
 end
 
 module Effect =
@@ -74,16 +75,11 @@ let run ?trace parent update view init =
   let view   = view push model in
 
     (* initial load *)
-    Eliom_content.Html5.Manip.replaceChildren parent (S.value view);
-    (* refresher *)
+    Eliom_content.Html5.Manip.replaceChildren parent [view];
+    (* actions *)
     E.keep @@
-    S.diff
-      (fun (newv, action) (oldv, _) ->
-         if newv != oldv then begin
-           Eliom_content.Html5.Manip.replaceChildren parent newv
-         end;
-         action ()) @@
-    S.Pair.pair ~eq:(==) view action
+    S.diff (fun action _ -> action ()) @@
+    action
 }}
 
 (* vim: set ft=ocaml: *)
