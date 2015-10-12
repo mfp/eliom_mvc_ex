@@ -4,6 +4,8 @@
   open Html5.D
   open Lwt
 
+  module React = Eliom_mvc_lib.React
+
   (* missing in ReactiveData 0.1 and don't feel like rebuilding eliom atm. *)
   let make_from_s s =
     let open ReactiveData.RList in
@@ -110,7 +112,7 @@ end
 
 module ThingList =
 struct
-  module M = React_map.Make(String)
+  module M = Eliom_mvc_lib.ReactMap(String)
 
   type model =
       {

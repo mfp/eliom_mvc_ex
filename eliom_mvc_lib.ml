@@ -1,6 +1,24 @@
 open Eliom_lib
 
-module Make(O : Map.OrderedType) :
+module React =
+struct
+  type 'a signal = 'a Lwt_react.signal
+  type 'a event  = 'a Lwt_react.event
+
+  module S =
+  struct
+    include Lwt_react.S
+
+    let space_safe_switch ?eq ss =
+      let s = switch ?eq ss in
+      let e = diff (fun _ old -> stop ~strong:true old) ss in
+        l2 ~eq:(==) (fun s () -> s) s (hold () e)
+  end
+
+  module E = Lwt_react.E
+end
+
+module ReactMap(O : Map.OrderedType) :
 sig
   include module type of Map.Make(O)
   module React :
@@ -25,11 +43,6 @@ struct
   module React =
   struct
     open React
-
-    let safe_switch ?eq ss =
-      let s = S.switch ?eq ss in
-      let e = S.diff (fun _ old -> S.stop ~strong:true old) ss in
-        S.l2 ~eq:(==) (fun s () -> s) s (S.hold () e)
 
     (* cannot be used in update cycle: S.value fails
     let merge m =
@@ -76,7 +89,7 @@ struct
 
       let init = fold (fun k v m -> add k (mk k) m) (S.value m) empty in
 
-        safe_switch ~eq:(==) @@
+        S.space_safe_switch ~eq:(==) @@
         S.map ~eq:(==) merge @@
         S.fold ~eq:(==)
           (fun m (added, deleted) ->
@@ -117,7 +130,7 @@ struct
 
       let mk k =
         let m =
-          safe_switch ?eq @@
+          S.space_safe_switch ?eq @@
           S.map ~eq:(==)
             (fun init ->
                S.fmap ?eq
@@ -145,7 +158,7 @@ struct
           key_changes
       in
         S.map ~eq:(==) snd @@
-        safe_switch ~eq:(==) @@
+        S.space_safe_switch ~eq:(==) @@
         S.map ~eq:(==) signal @@
         S.map ~eq:(==) (fun m -> fold (fun k v m -> add k (mk k) m) m empty) @@
         keep_value m
