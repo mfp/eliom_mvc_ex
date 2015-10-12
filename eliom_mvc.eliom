@@ -77,8 +77,12 @@ let run ?trace parent update view init =
   let model  = S.Pair.fst ~eq:(==) model_and_action in
   let action = S.Pair.snd ~eq:(==) model_and_action in
 
-  let view   = view push model in
-
+  let view   = try view push model
+               with exn ->
+                 Lwt_log.ign_error_f "Exception raised by view: %s" @@
+                 Printexc.to_string exn;
+                 raise exn
+  in
     (* initial load *)
     Eliom_content.Html5.Manip.replaceChildren parent [view];
     (* actions *)
