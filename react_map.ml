@@ -26,10 +26,10 @@ struct
   struct
     open React
 
-    let safe_switch ?eq s =
-      let e = S.diff (fun _ old -> S.stop ~strong:true old) s in
-      let s = S.switch ?eq s in
-        S.l2 (fun s () -> s) s (S.hold () e)
+    let safe_switch ?eq ss =
+      let s = S.switch ?eq ss in
+      let e = S.diff (fun _ old -> S.stop ~strong:true old) ss in
+        S.l2 ~eq:(==) (fun s () -> s) s (S.hold () e)
 
     (* cannot be used in update cycle: S.value fails
     let merge m =
@@ -87,6 +87,23 @@ struct
           init
           key_changes
 
+    let keep_value s =
+      let push v = function
+        | Some _ as x -> x
+        | None -> Some v in
+
+      let define d =
+        let d' = S.l2 push s d in
+          (d', d')
+      in
+        S.map ~eq:(==)
+          (function
+             | Some x -> x
+             | None ->
+                 Lwt_log.ign_error_f "React_map.keep_value: None unexpected";
+                 assert false) @@
+        S.fix ~eq:(==) None define
+
     let map ?eq f m =
       let key_changes =
         S.diff
@@ -100,16 +117,18 @@ struct
 
       let mk k =
         let m =
-          S.fmap ?eq
-            (fun m -> try Some (find k m) with Not_found -> None)
-            (find k @@ S.value m)
-            m
+          safe_switch ?eq @@
+          S.map ~eq:(==)
+            (fun init ->
+               S.fmap ?eq
+                 (fun m -> try Some (find k m) with Not_found -> None)
+                 (find k init)
+                 m) @@
+          keep_value m
         in
           (f k m, m) in
 
-      let init = fold (fun k v m -> add k (mk k) m) (S.value m) empty in
-
-        S.map ~eq:(==) snd @@
+      let signal init =
         S.fold ~eq:(==)
           (fun (m, m_) (added, deleted) ->
              List.iter
@@ -124,7 +143,11 @@ struct
                (m, m_))
           (init, map fst init)
           key_changes
-
-
+      in
+        S.map ~eq:(==) snd @@
+        safe_switch ~eq:(==) @@
+        S.map ~eq:(==) signal @@
+        S.map ~eq:(==) (fun m -> fold (fun k v m -> add k (mk k) m) m empty) @@
+        keep_value m
   end
 end
