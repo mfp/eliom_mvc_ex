@@ -9,6 +9,23 @@ struct
   struct
     include Lwt_react.S
 
+    let keep_value s =
+      let push v = function
+        | Some _ as x -> x
+        | None -> Some v in
+
+      let define d =
+        let d' = l2 push s d in
+          (d', d')
+      in
+        map ~eq:(==)
+          (function
+             | Some x -> x
+             | None ->
+                 Lwt_log.ign_error_f "React_map.keep_value: None unexpected";
+                 assert false) @@
+        fix ~eq:(==) None define
+
     let space_safe_switch ?eq ss =
       let s = switch ?eq ss in
       let e = diff (fun _ old -> stop ~strong:true old) ss in
@@ -100,23 +117,6 @@ struct
           init
           key_changes
 
-    let keep_value s =
-      let push v = function
-        | Some _ as x -> x
-        | None -> Some v in
-
-      let define d =
-        let d' = S.l2 push s d in
-          (d', d')
-      in
-        S.map ~eq:(==)
-          (function
-             | Some x -> x
-             | None ->
-                 Lwt_log.ign_error_f "React_map.keep_value: None unexpected";
-                 assert false) @@
-        S.fix ~eq:(==) None define
-
     let map ?eq f m =
       let key_changes =
         S.diff
@@ -137,7 +137,7 @@ struct
                  (fun m -> try Some (find k m) with Not_found -> None)
                  (find k init)
                  m) @@
-          keep_value m
+          S.keep_value m
         in
           (f k m, m) in
 
@@ -161,6 +161,6 @@ struct
         S.space_safe_switch ~eq:(==) @@
         S.map ~eq:(==) signal @@
         S.map ~eq:(==) (fun m -> fold (fun k v m -> add k (mk k) m) m empty) @@
-        keep_value m
+        S.keep_value m
   end
 end
