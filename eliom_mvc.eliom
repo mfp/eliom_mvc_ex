@@ -65,7 +65,12 @@ let run ?trace parent update view init =
 
   let model_and_action =
     S.fold ~eq:(==)
-      (fun (m, _) a -> update push a m)
+      (fun (m, _) a ->
+         try update push a m
+         with exn ->
+           Lwt_log.ign_error_f "Exception in model update: %s"
+             (Printexc.to_string exn);
+           raise exn)
       (init, (fun () -> ()))
       events in
 
