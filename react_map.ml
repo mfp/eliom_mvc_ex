@@ -99,20 +99,30 @@ struct
           m in
 
       let mk k =
-        f k @@
-        S.fmap ?eq
-          (fun m -> try Some (find k m) with Not_found -> None)
-          (find k @@ S.value m)
-          m in
+        let m =
+          S.fmap ?eq
+            (fun m -> try Some (find k m) with Not_found -> None)
+            (find k @@ S.value m)
+            m
+        in
+          (f k m, m) in
 
       let init = fold (fun k v m -> add k (mk k) m) (S.value m) empty in
 
+        S.map ~eq:(==) snd @@
         S.fold ~eq:(==)
-          (fun m (added, deleted) ->
-             let m = List.fold_left (fun m k -> remove k m) m deleted in
-             let m = List.fold_left (fun m k -> add k (mk k) m) m added in
-               m)
-          init
+          (fun (m, m_) (added, deleted) ->
+             List.iter
+               (fun k ->
+                  try S.stop ~strong:true @@ snd @@ find k m; with Not_found -> ())
+               deleted;
+             let m     = List.fold_left (fun m k -> remove k m) m deleted in
+             let m_    = List.fold_left (fun m k -> remove k m) m_ deleted in
+             let added = List.map (fun k -> (k, mk k)) added in
+             let m     = List.fold_left (fun m (k, v) -> add k v m) m added in
+             let m_    = List.fold_left (fun m (k, (v, _)) -> add k v m) m_ added in
+               (m, m_))
+          (init, map fst init)
           key_changes
 
 
