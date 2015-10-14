@@ -1,5 +1,88 @@
 open Eliom_lib
 
+
+(* Approximate diff algorithm for sequences where no element is repeated. *)
+module Cheap_diff =
+struct
+  type 'a patch =
+      Add of int * 'a
+    | Del of int
+
+  type 'a id = Real of 'a | Fake of int
+
+  let head = function
+    | [] -> "[]"
+    | x :: tl -> string_of_int @@ Obj.magic x
+
+  type leaning = L | R
+
+  let flip = function L -> R | R -> L
+
+  (* O(n log n + m log m) cheapo diff algorithm (compare to O(mn) worst case in
+   * usual LCS algos).
+   *
+   * Finds optimal patches when editions consist of:
+   * * any amount of deletions
+   * * any amount of insertions
+   *
+   * Finds probabilistically OKish patches when there are moves.
+   *)
+  let diff (type a) (type origid) get_id compare_id l1 l2 =
+    let cmp_id a b = match a, b with
+      | Real a, Real b -> compare_id a b
+      | Real _, Fake _ -> -1
+      | Fake _, Real _ -> 1
+      | Fake a, Fake b -> a - b  (* no overflow here, we won't have 2^30 lists... *)
+    in
+    let module S = Set.Make(struct
+                              type t = a * origid id
+                              let compare (x1, id1) (x2, id2) =
+                                if x1 == x2 then 0
+                                else cmp_id id1 id2
+                            end) in
+
+    let same (x1, id1) (x2, id2) = x1 == x2 || cmp_id id1 id2 = 0 in
+
+    let rec diff par patches ((added, removed) as ss) off l1 l2 =
+      match l1, l2 with
+      | [], [] -> List.rev patches
+      | x1 :: tl1, [] -> diff par (Del off :: patches) ss off tl1 l2
+      | [], x2 :: tl2 ->
+          diff par (Add (off, fst x2) :: patches) ss (off + 1) l1 tl2
+      | x1 :: tl1, x2 :: tl2 when same x1 x2 ->
+          diff par patches ss (off + 1) tl1 tl2
+      | x1 :: tl1, x2 :: tl2 (* different *) ->
+          if S.mem x1 removed then
+            diff par (Del off :: patches) ss off tl1 l2
+          else if S.mem x2 added then
+            diff par (Add (off, fst x2) :: patches) ss (off + 1) l1 tl2
+          else match par with
+            | R ->
+              diff (flip par)
+                (Del off :: patches) (S.add x1 added, removed) off tl1 l2
+            | L ->
+              diff (flip par)
+                (Add (off, fst x2) :: patches)
+                (added, S.add x2 removed) (off + 1) l1 tl2 in
+
+    let get_id =
+      let n = ref 0 in
+        (fun x -> match get_id x with
+           | Some id -> Real id
+           | None -> incr n; Fake !n) in
+
+    let l1      = List.map (fun x -> (x, get_id x)) l1 in
+    let l2      = List.map (fun x -> (x, get_id x)) l2 in
+
+    let s1      = S.of_list l1 in
+    let s2      = S.of_list l2 in
+
+    let added   = S.diff s2 s1 in
+    let removed = S.diff s1 s2 in
+
+      diff L [] (added, removed) 0 l1 l2
+end
+
 module React =
 struct
   type 'a signal = 'a Lwt_react.signal

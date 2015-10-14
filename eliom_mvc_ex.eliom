@@ -5,9 +5,65 @@
   open Lwt
 
   module React = Eliom_mvc_lib.React
+
+  open React
 }}
 
 {client{
+
+module CD = Eliom_mvc_lib.Cheap_diff
+
+(* Issue: internal signals/events that depend on the supplied signal
+ * are not stopped, causing a leak in absence of weak refs / GC finalizers
+ * (i.e., under js_of_ocaml) *)
+let to_rlist_with_delta s =
+  let init, push = E.create () in
+  let needs_init = ref true in
+    ignore begin
+      Lwt.pause () >>
+      Lwt.catch
+        (fun () ->
+           if not !needs_init then
+             Lwt.return ()
+           else begin
+             needs_init := false;
+             Lwt.return @@ push @@ ([], S.value s)
+           end)
+        (fun _ -> Lwt.return ())
+    end;
+    ReactiveData.RList.make_from (try S.value s with _ -> []) @@
+    E.map
+      (fun (l0, l1) ->
+         needs_init := false;
+
+         let patches =
+           CD.diff
+             (fun elm ->
+                match Eliom_content.Xml.get_node_id @@
+                      Eliom_content.Html5.D.toelt elm
+                with
+                  | Eliom_content.Xml.NoId -> None
+                  | x -> Some x)
+             compare
+             l0 l1 in
+
+         let () =
+           List.iter
+             (function
+                | CD.Add (n, _) -> Lwt_log.ign_debug_f "XXX Add (%d, _)" n
+                | CD.Del n -> Lwt_log.ign_debug_f "XXX Del (%d, _)" n)
+             patches in
+
+         let patches =
+           List.map
+             (function
+                | CD.Add (n, x) -> ReactiveData.RList.I (n, x)
+                | CD.Del n -> ReactiveData.RList.R n)
+             patches
+         in
+           Lwt_log.ign_debug_f "XXX %d patches" (List.length patches);
+           ReactiveData.RList.Patch patches) @@
+    E.select [ S.diff (fun l1 l0 -> (l0, l1)) s; init ]
 
 module R = Html5.R
 
@@ -20,8 +76,6 @@ struct
   let update push a m = match a with
     | `Inc -> no_effect @@ m + 1
     | `Dec -> no_effect @@ m - 1
-
-  open React
 
   type context = unit
   type view = [`Span]
@@ -60,8 +114,6 @@ struct
           { m with count } &&! effect
     | Set_focus elm ->
         m &&! (fun () -> (Html5.To_dom.of_input elm)##focus())
-
-  open React
 
   type context = unit Eliom_mvc.push_action
   type view = [`Tr] elt
@@ -166,8 +218,6 @@ struct
               in
                 { m with things = M.add id thing m.things } &&! effect
 
-  open React
-
   type context = unit
   type view    = [`Div] elt
 
@@ -200,7 +250,7 @@ struct
         things in
 
     let rows =
-      S.to_rlist @@
+      to_rlist_with_delta @@
       S.map ~eq:(==) (fun m -> List.rev @@ M.fold (fun _ v l -> v :: l) m [])
         thing_views
     in
