@@ -37,8 +37,7 @@ struct
     let module S = Set.Make(struct
                               type t = a * origid id
                               let compare (x1, id1) (x2, id2) =
-                                if x1 == x2 then 0
-                                else cmp_id id1 id2
+                                cmp_id id1 id2
                             end) in
 
     let same (x1, id1) (x2, id2) = x1 == x2 || cmp_id id1 id2 = 0 in
