@@ -5,11 +5,6 @@
   open Lwt
 
   module React = Eliom_mvc_lib.React
-
-  (* missing in ReactiveData 0.1 and don't feel like rebuilding eliom atm. *)
-  let make_from_s s =
-    let open ReactiveData.RList in
-    make_from (React.S.value s) (React.E.map (fun e -> Set e) (React.S.changes s))
 }}
 
 {client{
@@ -205,7 +200,7 @@ struct
         things in
 
     let rows =
-      make_from_s @@
+      S.to_rlist @@
       S.map ~eq:(==) (fun m -> List.rev @@ M.fold (fun _ v l -> v :: l) m [])
         thing_views
     in
