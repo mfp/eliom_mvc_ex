@@ -10,10 +10,6 @@ struct
 
   type 'a id = Real of 'a | Fake of int
 
-  let head = function
-    | [] -> "[]"
-    | x :: tl -> string_of_int @@ Obj.magic x
-
   type leaning = L | R
 
   let flip = function L -> R | R -> L
