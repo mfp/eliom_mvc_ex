@@ -142,7 +142,8 @@ sig
   include module type of Map.Make(O)
   module React :
   sig
-    (* val merge : 'a React.signal t -> 'a t React.signal *)
+    val merge : 'a React.signal t -> 'a t React.signal
+
     val map_s :
       ?eq:('a -> 'a -> bool) ->
       (O.t -> 'a React.signal -> 'b React.signal) ->
