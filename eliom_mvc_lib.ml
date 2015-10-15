@@ -18,16 +18,18 @@ struct
 
   let flip = function L -> R | R -> L
 
-  (* O(n log n + m log m) cheapo diff algorithm (compare to O(mn) worst case in
-   * usual LCS algos).
+  (* O(n log n + m log m) diff algorithm on lists with no repeated elements
+   * (enforced trivially by assigning arbitrary ids to elements with no id) -
+   * compare to O(mn) worst case in usual LCS algos.
    *
    * Finds optimal patches when editions consist of:
    * * any amount of deletions
    * * any amount of insertions
    *
-   * Finds probabilistically OKish patches when there are moves.
+   * Finds patches within ~2X of the Levenshtein distance when there are
+   * moves.
    *)
-  let diff (type a) (type origid) get_id compare_id l1 l2 =
+  let diff (type a) (type origid) ?(equal = (==)) get_id compare_id l1 l2 =
     let cmp_id a b = match a, b with
       | Real a, Real b -> compare_id a b
       | Real _, Fake _ -> -1
@@ -40,7 +42,7 @@ struct
                                 cmp_id id1 id2
                             end) in
 
-    let same (x1, id1) (x2, id2) = x1 == x2 || cmp_id id1 id2 = 0 in
+    let same (x1, id1) (x2, id2) = equal x1 x2 || cmp_id id1 id2 = 0 in
 
     let rec diff par patches ((added, removed) as ss) off l1 l2 =
       match l1, l2 with
